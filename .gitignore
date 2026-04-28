@@ -1,0 +1,24 @@
+.DS_Store
+Thumbs.db
+
+# OS/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local packages and build outputs
+*.zip
+dist/
+build/
+node_modules/
+vendor/
+
+# WordPress/runtime artifacts
+debug.log
+*.log
+
+# Local environment files
+.env
+.env.*
+

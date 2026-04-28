@@ -38,7 +38,15 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build Freemius ZIP
+        env:
+          FREEMIUS_PRODUCT_ID: ${{ secrets.FREEMIUS_PRODUCT_ID }}
+          FREEMIUS_API_TOKEN: ${{ secrets.FREEMIUS_API_TOKEN }}
         run: |
+          if [ -z "$FREEMIUS_PRODUCT_ID" ] || [ -z "$FREEMIUS_API_TOKEN" ]; then
+            echo "FREEMIUS_PRODUCT_ID and FREEMIUS_API_TOKEN secrets are required." >&2
+            exit 1
+          fi
+
           SLUG="mimamori-client-agent"
           VERSION="${{ steps.version.outputs.version }}"
           rm -rf dist
@@ -53,6 +61,85 @@ jobs:
             --exclude="README.md" \
             --exclude="IMPLEMENTATION-NOTES-*.md" \
             ./ "dist/package/$SLUG/"
+
+          PRODUCT_JSON=$(curl -sS "https://api.freemius.com/v1/products/$FREEMIUS_PRODUCT_ID.json?fields=id,public_key,slug,title" \
+            -H "Authorization: Bearer $FREEMIUS_API_TOKEN")
+          PUBLIC_KEY=$(PRODUCT_JSON="$PRODUCT_JSON" python - <<'PY'
+          import json
+          import os
+          data = json.loads(os.environ["PRODUCT_JSON"])
+          print(data.get("public_key", ""))
+          PY
+          )
+
+          if [ -z "$PUBLIC_KEY" ]; then
+            echo "Could not retrieve Freemius public_key for SDK initialization." >&2
+            exit 1
+          fi
+
+          curl -sSL "https://github.com/Freemius/wordpress-sdk/archive/refs/heads/master.zip" -o /tmp/freemius-wordpress-sdk.zip
+          rm -rf /tmp/freemius-wordpress-sdk
+          unzip -q /tmp/freemius-wordpress-sdk.zip -d /tmp/freemius-wordpress-sdk
+          SDK_DIR=$(find /tmp/freemius-wordpress-sdk -maxdepth 1 -type d -name "wordpress-sdk-*" | head -n 1)
+          if [ -z "$SDK_DIR" ]; then
+            echo "Could not locate downloaded Freemius SDK directory." >&2
+            exit 1
+          fi
+          mkdir -p "dist/package/$SLUG/freemius"
+          rsync -a "$SDK_DIR/" "dist/package/$SLUG/freemius/"
+
+          PRODUCT_ID="$FREEMIUS_PRODUCT_ID" PUBLIC_KEY="$PUBLIC_KEY" SLUG="$SLUG" python - <<'PY'
+          import os
+          from pathlib import Path
+
+          slug = os.environ["SLUG"]
+          product_id = os.environ["PRODUCT_ID"]
+          public_key = os.environ["PUBLIC_KEY"]
+          plugin_file = Path("dist/package") / slug / "mimamori-client-agent.php"
+          text = plugin_file.read_text(encoding="utf-8")
+          marker = "if (!defined('ABSPATH')) exit;\n"
+          snippet = """
+if ( ! function_exists( 'mmca_fs' ) ) {
+    function mmca_fs() {
+        global $mmca_fs;
+
+        if ( ! isset( $mmca_fs ) ) {
+            require_once dirname(__FILE__) . '/freemius/start.php';
+
+            $mmca_fs = fs_dynamic_init( array(
+                'id'                  => '__PRODUCT_ID__',
+                'slug'                => 'mimamori-client-agent',
+                'type'                => 'plugin',
+                'public_key'          => '__PUBLIC_KEY__',
+                'is_premium'          => false,
+                'has_premium_version' => false,
+                'has_paid_plans'      => false,
+                'has_addons'          => false,
+                'anonymous_mode'      => true,
+                'menu'                => array(
+                    'slug'       => 'mmca_dashboard',
+                    'first-path' => 'admin.php?page=mmca_dashboard',
+                    'account'    => false,
+                    'contact'    => false,
+                    'support'    => false,
+                    'pricing'    => false,
+                ),
+            ) );
+        }
+
+        return $mmca_fs;
+    }
+
+    mmca_fs();
+    do_action( 'mmca_fs_loaded' );
+}
+"""
+          snippet = snippet.replace("__PRODUCT_ID__", product_id).replace("__PUBLIC_KEY__", public_key)
+          if "function mmca_fs()" not in text:
+              text = text.replace(marker, marker + "\n" + snippet + "\n", 1)
+          plugin_file.write_text(text, encoding="utf-8")
+          PY
+
           cd dist/package
           zip -r "../$SLUG-$VERSION.zip" "$SLUG"
           cd ../..

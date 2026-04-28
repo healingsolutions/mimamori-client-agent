@@ -45,6 +45,7 @@ foreach ($pattern in $secretPatterns) {
 
 $assignmentPatterns = @(
     "FREEMIUS_ACCESS_TOKEN\s*=\s*['""][^'""]{12,}['""]",
+    "FREEMIUS_API_TOKEN\s*=\s*['""][^'""]{12,}['""]",
     "FREEMIUS_SECRET\w*\s*=\s*['""][^'""]{12,}['""]",
     "secret_key\s*=\s*['""][^'""]{12,}['""]",
     "private_key\s*=\s*['""][^'""]{12,}['""]"

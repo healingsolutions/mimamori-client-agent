@@ -38,7 +38,7 @@ Freemius へアップロードするとき:
 
 ```powershell
 $env:FREEMIUS_PRODUCT_ID="12345"
-$env:FREEMIUS_ACCESS_TOKEN="..."
+$env:FREEMIUS_API_TOKEN="..."
 .\tools\ok-freemius.ps1 -ReleaseMode pending
 ```
 

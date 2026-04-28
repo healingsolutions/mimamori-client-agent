@@ -2,7 +2,7 @@ param(
     [ValidateSet("pending", "beta", "released")]
     [string]$ReleaseMode = "pending",
     [string]$ProductId = $env:FREEMIUS_PRODUCT_ID,
-    [string]$AccessToken = $env:FREEMIUS_ACCESS_TOKEN,
+    [string]$AccessToken = $env:FREEMIUS_API_TOKEN,
     [switch]$PackageOnly
 )
 
@@ -40,7 +40,7 @@ if ($PackageOnly) {
 if (-not $ProductId -or -not $AccessToken) {
     Write-Host "Freemius credentials are not configured. Set these environment variables and run again:"
     Write-Host '  $env:FREEMIUS_PRODUCT_ID="12345"'
-    Write-Host '  $env:FREEMIUS_ACCESS_TOKEN="..."'
+    Write-Host '  $env:FREEMIUS_API_TOKEN="..."'
     Write-Host "Package was created but not uploaded."
     exit 2
 }
@@ -81,4 +81,3 @@ if ($ReleaseMode -ne "pending") {
 
     Write-Host "Updated Freemius deployment release mode to: $ReleaseMode"
 }
-

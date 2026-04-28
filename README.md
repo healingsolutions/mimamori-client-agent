@@ -26,3 +26,20 @@ WordPress サイトの状態を無料で診断し、更新候補・基本設定�
 - Text domain: `mimamori-client-agent`
 - Current version: `0.4.0`
 
+## リリース運用
+
+GitHub へ反映するとき:
+
+```powershell
+.\tools\ok-git.ps1 -Message "Update client plugin"
+```
+
+Freemius へアップロードするとき:
+
+```powershell
+$env:FREEMIUS_PRODUCT_ID="12345"
+$env:FREEMIUS_ACCESS_TOKEN="..."
+.\tools\ok-freemius.ps1 -ReleaseMode pending
+```
+
+Freemius の本番配信は、最初は `pending` でアップロードして管理画面で確認してから `released` に変更します。

@@ -1,0 +1,107 @@
+name: Deploy to Freemius
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_mode:
+        description: Freemius release mode
+        required: true
+        default: pending
+        type: choice
+        options:
+          - pending
+          - beta
+          - released
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PHP syntax
+        run: |
+          find . -name "*.php" -not -path "./dist/*" -print0 | xargs -0 -n1 php -l
+
+      - name: Detect version
+        id: version
+        run: |
+          VERSION=$(php -r '$file=file_get_contents("mimamori-client-agent.php"); preg_match("/Version:\s*([^\r\n]+)/", $file, $m); echo trim($m[1] ?? "");')
+          if [ -z "$VERSION" ]; then
+            echo "Could not detect plugin version." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build Freemius ZIP
+        run: |
+          SLUG="mimamori-client-agent"
+          VERSION="${{ steps.version.outputs.version }}"
+          rm -rf dist
+          mkdir -p "dist/package/$SLUG"
+          rsync -a \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="dist" \
+            --exclude="tools" \
+            ./ "dist/package/$SLUG/"
+          cd dist/package
+          zip -r "../$SLUG-$VERSION.zip" "$SLUG"
+          cd ../..
+          ls -lh "dist/$SLUG-$VERSION.zip"
+
+      - name: Upload to Freemius
+        id: upload
+        env:
+          FREEMIUS_PRODUCT_ID: ${{ secrets.FREEMIUS_PRODUCT_ID }}
+          FREEMIUS_ACCESS_TOKEN: ${{ secrets.FREEMIUS_ACCESS_TOKEN }}
+          RELEASE_MODE: ${{ inputs.release_mode }}
+        run: |
+          if [ -z "$FREEMIUS_PRODUCT_ID" ] || [ -z "$FREEMIUS_ACCESS_TOKEN" ]; then
+            echo "FREEMIUS_PRODUCT_ID and FREEMIUS_ACCESS_TOKEN secrets are required." >&2
+            exit 1
+          fi
+
+          SLUG="mimamori-client-agent"
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP="dist/$SLUG-$VERSION.zip"
+
+          RESPONSE=$(curl -sS -X POST "https://api.freemius.com/v1/products/$FREEMIUS_PRODUCT_ID/tags.json" \
+            -H "Authorization: Bearer $FREEMIUS_ACCESS_TOKEN" \
+            -F "file=@$ZIP")
+
+          echo "$RESPONSE" > dist/freemius-upload-response.json
+          TAG_ID=$(python - <<'PY'
+          import json
+          with open("dist/freemius-upload-response.json", encoding="utf-8") as f:
+              data = json.load(f)
+          print(data.get("id", ""))
+          PY
+          )
+
+          if [ -z "$TAG_ID" ]; then
+            cat dist/freemius-upload-response.json
+            echo "Freemius upload response did not include a deployment id." >&2
+            exit 1
+          fi
+
+          echo "tag_id=$TAG_ID" >> "$GITHUB_OUTPUT"
+
+          if [ "$RELEASE_MODE" != "pending" ]; then
+            curl -sS -X PUT "https://api.freemius.com/v1/products/$FREEMIUS_PRODUCT_ID/tags/$TAG_ID.json" \
+              -H "Authorization: Bearer $FREEMIUS_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "{\"release_mode\":\"$RELEASE_MODE\",\"has_premium\":false}" \
+              > dist/freemius-release-response.json
+          fi
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freemius-package
+          path: dist/*.zip
+

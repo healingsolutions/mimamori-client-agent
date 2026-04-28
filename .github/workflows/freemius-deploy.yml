@@ -90,6 +90,7 @@ jobs:
 
           PRODUCT_ID="$FREEMIUS_PRODUCT_ID" PUBLIC_KEY="$PUBLIC_KEY" SLUG="$SLUG" python - <<'PY'
           import os
+          import textwrap
           from pathlib import Path
 
           slug = os.environ["SLUG"]
@@ -98,42 +99,42 @@ jobs:
           plugin_file = Path("dist/package") / slug / "mimamori-client-agent.php"
           text = plugin_file.read_text(encoding="utf-8")
           marker = "if (!defined('ABSPATH')) exit;\n"
-          snippet = """
-if ( ! function_exists( 'mmca_fs' ) ) {
-    function mmca_fs() {
-        global $mmca_fs;
+          snippet = textwrap.dedent("""
+              if ( ! function_exists( 'mmca_fs' ) ) {
+                  function mmca_fs() {
+                      global $mmca_fs;
 
-        if ( ! isset( $mmca_fs ) ) {
-            require_once dirname(__FILE__) . '/freemius/start.php';
+                      if ( ! isset( $mmca_fs ) ) {
+                          require_once dirname(__FILE__) . '/freemius/start.php';
 
-            $mmca_fs = fs_dynamic_init( array(
-                'id'                  => '__PRODUCT_ID__',
-                'slug'                => 'mimamori-client-agent',
-                'type'                => 'plugin',
-                'public_key'          => '__PUBLIC_KEY__',
-                'is_premium'          => false,
-                'has_premium_version' => false,
-                'has_paid_plans'      => false,
-                'has_addons'          => false,
-                'anonymous_mode'      => true,
-                'menu'                => array(
-                    'slug'       => 'mmca_dashboard',
-                    'first-path' => 'admin.php?page=mmca_dashboard',
-                    'account'    => false,
-                    'contact'    => false,
-                    'support'    => false,
-                    'pricing'    => false,
-                ),
-            ) );
-        }
+                          $mmca_fs = fs_dynamic_init( array(
+                              'id'                  => '__PRODUCT_ID__',
+                              'slug'                => 'mimamori-client-agent',
+                              'type'                => 'plugin',
+                              'public_key'          => '__PUBLIC_KEY__',
+                              'is_premium'          => false,
+                              'has_premium_version' => false,
+                              'has_paid_plans'      => false,
+                              'has_addons'          => false,
+                              'anonymous_mode'      => true,
+                              'menu'                => array(
+                                  'slug'       => 'mmca_dashboard',
+                                  'first-path' => 'admin.php?page=mmca_dashboard',
+                                  'account'    => false,
+                                  'contact'    => false,
+                                  'support'    => false,
+                                  'pricing'    => false,
+                              ),
+                          ) );
+                      }
 
-        return $mmca_fs;
-    }
+                      return $mmca_fs;
+                  }
 
-    mmca_fs();
-    do_action( 'mmca_fs_loaded' );
-}
-"""
+                  mmca_fs();
+                  do_action( 'mmca_fs_loaded' );
+              }
+          """)
           snippet = snippet.replace("__PRODUCT_ID__", product_id).replace("__PUBLIC_KEY__", public_key)
           if "function mmca_fs()" not in text:
               text = text.replace(marker, marker + "\n" + snippet + "\n", 1)

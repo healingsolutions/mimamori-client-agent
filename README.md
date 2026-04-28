@@ -43,3 +43,5 @@ $env:FREEMIUS_ACCESS_TOKEN="..."
 ```
 
 Freemius の本番配信は、最初は `pending` でアップロードして管理画面で確認してから `released` に変更します。
+
+配布 ZIP は `git archive` / GitHub Actions の Linux `zip` で作成し、開発用の `.github/`、`tools/`、`README.md` は含めません。
